@@ -5,9 +5,8 @@ Created on Tue Feb 21 10:17:38 2017
 Module interfaces with the PSS/E software through the standard PSS/E APIs. 
 
 Creates and deletes additional files needed for certain PSS/E features (e.g. 
-.dfx, .con, .mon, .sub). Redirects PSS/E output to a string variable. Use 
-import_psse_results.py module to translate the text of the results into a
-dataframe.
+.dfx, .con, .mon, .sub). Redirects PSS/E output to a string variable. 
+Translates the text of the results into a dataframe.
 
 @author: Jesse Boyd
 """
