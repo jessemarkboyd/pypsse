@@ -11,5 +11,5 @@ setup(
     long_description = open('README.txt').read(),
     py_modules = ['pypsse'],
     license = 'Creative Commons Attribution-Noncommercial-Share Alike license',
-    install_requires = ['pandas','numpy','psse34'],
+    install_requires = ['pandas','numpy','psse34','Tkinter','os','sys','re','StringIO'],
 )
