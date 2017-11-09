@@ -4,7 +4,7 @@ setup(
     author = 'Jesse Boyd',
     author_email = 'jessemarkboyd@gmail.com',
     url = 'https://github.com/jessemarkboyd/pypsse',
-    download_url = 'https://github.com/jessemarkboyd/pypsse/tarball/0.2.7',
+    download_url = 'https://github.com/jessemarkboyd/pypsse/tarball/0.0.1',
     keywords = ['testing', 'logging', 'psse', 'powerflow', 'loadflow'],
     version = '0.1.1',
     description = 'PSSE API wrapper for Python',
