@@ -13,7 +13,6 @@ the text of the results into a dataframe.
 import Tkinter
 import tkFileDialog
 import StringIO
-import re
 import os, sys
 import pandas as pd
 import numpy as np
@@ -45,6 +44,7 @@ import redirect
 _i = 100000000
 _f = 1.00000002004e+20
 _s = 'ÿ'
+stdout = sys.stdout
 
 
 class pypsse(object):
@@ -60,10 +60,6 @@ class pypsse(object):
         output from sys.out to a StringIO for processing."""
         self.error_message = ''
         self.__internally_created_files__ = []
-        if isinstance(sys.stdout,StringIO.StringIO):
-            pass
-        else:
-            self.__old_stdout__ = sys.stdout
         self.out = StringIO.StringIO()
         sys.stdout = self.out
         self.support_file_path = ''
@@ -115,8 +111,8 @@ class pypsse(object):
         
     def __del__(self):
         """method automatically called when an instance of pypsse is deleted."""
-        sys.stdout = self.__old_stdout__
         self.__delete_created_files__()
+        sys.stdout = stdout
 
 
     def __reset__(self,delete_files=True):
@@ -132,14 +128,21 @@ class pypsse(object):
 
     def redirectoutput(self):
         if isinstance(sys.stdout,StringIO.StringIO):
-            sys.stdout = self.__old_stdout__
+            sys.stdout = stdout
             return True
         else:
             self.out = StringIO.StringIO()
             sys.stdout = self.out
             return True
 
-
+    def printstring(self,string):
+        if isinstance(sys.stdout,StringIO.StringIO):
+            self.redirectoutput()
+            print(string)
+            self.redirectoutput()
+        else:
+            print(string)
+        
     def __delete_created_files__(self,exclude_ext=''):
         """Deletes the files which PSS/E annoyingly requires the user to create"""
         def delete_file(path):
@@ -182,7 +185,6 @@ class pypsse(object):
             if ierr:
                 self.error_message += ('Error opening case. API \'readrawversion\' error code %d/n' %ierr)    
                 return False
-            self.data = pypsseresultconverter.readrawversion(self.out.getvalue())
         else:
             ierr = psspy.case(casepath)
             if ierr:
@@ -273,10 +275,8 @@ class pypsse(object):
         return True
     
     
-    def create_confile(self,filepath,subname,desc=None,element=None):
+    def create_confile(self,filepath):
         text = 'COM\nCOM  Contingency file created through pypsse \nCOM\n'
-        if desc is not None and element is not None:
-            text += desc + ' ' + element + ' IN SUBSYSTEM \'' + subname + '\'\n'
         with open(filepath, 'w') as f:
             f.write(text)
         self.__internally_created_files__ += filepath
@@ -332,6 +332,12 @@ class pypsse(object):
         return psspy.busexs(ibus)==0
 
 
+    def area_exists(self,areanum):
+        return False
+        
+    def owner_exists(self,ownernum):
+        return False
+        
     def branch_exists(self,ibus=0,jbus=0):
         """Returns boolean value."""
         if self.bus_exists(ibus) and self.bus_exists(jbus):
@@ -471,7 +477,7 @@ class pypsse(object):
         if dtype == str and data is not None:
             data = [str(x).strip() for x in data]
         if ierr:
-            self.error_message += 'Error retrieving {} data: \nAPI \'{}\' error code {}'.format(colname,str(arrapp),ierr)
+            self.error_message += 'Error retrieving {} data: \nAPI \'{}\' error code {}.\n'.format(colname,str(arrapp),ierr)
             return df.copy()
         if len(df.index) != len(data):
             raise ValueError('Dataframe must be the same length as the array results. Dataframe length: {}. Array length: {}.'.format(len(df.index),len(arr[0])))
@@ -503,7 +509,6 @@ class pypsse(object):
             ibuslist = ibuslist[0]
             df = pd.DataFrame(index=ibuslist,data=np.empty((len(ibuslist),len(datafields))).fill(np.nan),columns=datafields)
             dtypes = psspy.abustypes(datafields)[1]
-            self.debug = dtypes, datafields
             for n in xrange(len(datafields)):
                 if dtypes[n] == 'I':
                     app = psspy.abusint
@@ -620,7 +625,7 @@ class pypsse(object):
             df = df.merge(df_sid,how='left',on=['FROMNUMBER','TONUMBER','ID'])
         # results for specified sid
         elif sid:
-            ierr, ibuslist = psspy.atrnint(sid=sid,flag=flag,string='FROMNUMBER')[1]
+            ibuslist = psspy.atrnint(sid=sid,flag=flag,string='FROMNUMBER')[1]
             ibuslist = ibuslist[0]
             if ibuslist:
                 df = pd.DataFrame(index=xrange(len(ibuslist)),data=np.empty((len(ibuslist),len(datafields))).fill(np.nan),columns=datafields)
@@ -646,7 +651,7 @@ class pypsse(object):
         return df 
     
     
-    def get_multiple_tr3_data(self,sid=None,ibuslist=[],jbuslist=[],kbuslist=[],datafields=[],flag=4):
+    def get_multiple_tr3_data(self,sid=None,ibuslist=[],jbuslist=[],kbuslist=[],datafields=[],flag=2):
         """Returns a dataframe of three winding transformers as specified in the buslist or in the SID"""
         # data check
         if len(ibuslist) != len(jbuslist) or len(jbuslist) != len(kbuslist):
@@ -654,7 +659,7 @@ class pypsse(object):
         if not datafields:
             for k in self.A_TR3_FIELDS.keys():
                 datafields += self.A_TR3_FIELDS[k]
-        for c in ['WIND1NUMBER','WIND2NUMBER','WIND3NUMBER']:
+        for c in ['WIND1NUMBER','WIND2NUMBER','WIND3NUMBER','ID']:
             if c not in datafields:
                 datafields.append(c)
         if sid and ibuslist:
@@ -673,7 +678,7 @@ class pypsse(object):
             df = self.get_multiple_tr3_data(sid=sid,datafields=datafields)
         # results for specified sid
         elif sid:
-            ierr, ibuslist = psspy.abrnint(sid=sid,flag=flag,string='FROMNUMBER')
+            ierr, ibuslist = psspy.atr3int(sid=sid,flag=flag,string='WIND1NUMBER')
             ibuslist = ibuslist[0]
             if ibuslist:
                 df = pd.DataFrame(index=xrange(len(ibuslist)),data=np.empty((len(ibuslist),len(datafields))).fill(np.nan),columns=datafields)
@@ -706,7 +711,7 @@ class pypsse(object):
                 datafields += self.A_MACH_FIELDS[k]
         if sid and buslist:
             print('Both sid and buslist were provided. Only using sid.')
-        if not sid and buslist:
+        if buslist and not sid:
             sid = 11
             ierr = psspy.bsys(sid=sid, numbus=len(buslist), buses=buslist)
             if ierr:
@@ -718,7 +723,11 @@ class pypsse(object):
             ierr, buslist = psspy.amachint(sid=sid,flag=flag,string='NUMBER')
             buslist = buslist[0]
             df = pd.DataFrame(index=buslist,data=np.empty((len(buslist),len(datafields))).fill(np.nan),columns=datafields)
-            dtypes = psspy.amachtypes(datafields)[1]
+            ierr, dtypes = psspy.amachtypes(datafields)
+            while ierr in range(1,len(datafields)+1):
+                self.error_message += 'Error determining data types: API \'amachtypes\' does not recognize datafield {}. Proceeding without this field.'.format(datafields[ierr-1])
+                datafields.remove(datafields[ierr-1])
+                ierr, dtypes = psspy.amachtypes(datafields)
             for n in xrange(len(datafields)):
                 if dtypes[n] == 'I':
                     app = psspy.amachint
@@ -734,7 +743,7 @@ class pypsse(object):
                 fld = datafields[n]
                 df = self.__add_arr__(df,app,fld,d,sid=sid,flag=flag,string=fld) 
         else:
-            df = pd.DataFrame(datafields)
+            df = pd.DataFrame(columns=datafields)
         df.index.name = 'NUMBER'
         return df
        
@@ -794,7 +803,6 @@ class pypsse(object):
         buses.extend(df['WIND1NUMBER'].tolist())
         buses.extend(df['WIND2NUMBER'].tolist())
         buses.extend(df['WIND3NUMBER'].tolist())
-        self.debug = buses
         return list(set(buses))
 
 
@@ -845,81 +853,89 @@ class pypsse(object):
         """Creates a new bus by splitting the specified existing bus. 
         By default, searches for the next bus number available below 99999 and
         names the bus 'NEWBUS9XXXX. Return a dataframe of the new bus."""
-        if newnum is None:
+#        for k,v in kwargs.iteritems:
+#            exec("%s = %s" % (k,v))
+        if not newnum:
             newnum = 999997
             while newnum > 0:
                 if not self.bus_exists(newnum):
                     break
                 newnum -= 1
-        if newnam is None:
+        if not newnam:
             newnam = 'NEWBUS{}'.format(newnum)
-        if newkv is None:
+        if not newkv:
             newkv = _f
-        ierr = psspy.splt(bus=bus,newnum=newnum,newnam=newnam,newkv=newkv)
+        ierr = psspy.splt(bus=int(bus),newnum=int(newnum),newnam=newnam,newkv=float(newkv))
         if ierr:
             self.error_message += 'Error splitting bus {}. API \'splt\' code {}'.format(bus,ierr)
         return self.get_multiple_bus_data(ibuslist=[newnum])
+            
         
-    
-    def create_gen_from_split(self,bus,capacity,*args,**kwargs):
-        """Creates a plant at the specified bus"""
-        if 'newkv' not in kwargs:
-            kwargs['newkv'] = 34.5
-        df = self.create_bus_from_split(bus,*args,**kwargs)
-        newbus = df['NUMBER'].max()
-        ierr = psspy.bus_data_3(newbus,intgar1=2,name='NEWGEN{}'.format(newbus))
-        if ierr:
-            self.error_message += 'Error modifying bus data. API \'bus_data_3\' code {}'.format(ierr)
-            return None
-        vreg = self.get_multiple_bus_data(ibuslist=[bus],datafields=['PU'])['PU'].max()
-        ierr = psspy.plant_data(newbus,bus,[vreg,100.0])
-        if ierr:
-            self.error_message += 'Error creating plant. API \'plant_data\' code {}'.format(ierr)
-        ierr = psspy.machine_data_2(newbus,r'1',realar3=capacity/3,realar4=-capacity/3,realar5=capacity,realar6=0.0,realar8=_i,realar9=_i)
-        if ierr:
-            self.error_message += 'Error creating machine. API \'machine_data_2\' code {}'.format(ierr)
-        return self.get_multiple_machine_data(buslist=[newbus])   
+    def create_gen(self,bus,genbus=None,capacity=0,kwargs={}):
+        """Splits the specified bus and inserts a generator at the new bus. Returns dataframe of the new machine.
+        kwargs are the inputs specified for bus_data_3"""
+        # retreive bus data
+        poi_bus = self.get_single_bus_data(ibus=bus,datafields=['AREA','ZONE','PU','OWNER'])
+        areanum = int(poi_bus['AREA'].max())
+        zonenum = int(poi_bus['ZONE'].max())
+        ownernum = int(poi_bus['OWNER'].max())
+        vreg = float(poi_bus['PU'].max())
         
+        # define the new gen bus
+        if not genbus:
+            genbus = 999997
+            while genbus > 0:
+                if not self.bus_exists(genbus):
+                    break
+                genbus -= 1
+        if 'name' not in kwargs.keys():
+            kwargs['name'] = 'NEWBUS{}'.format(genbus)
+        kwargs['intgar1'] = 2
+        if 'intgar2' not in kwargs.keys():
+            kwargs['intgar2'] = areanum
+        if 'intgar3' not in kwargs.keys():
+            kwargs['intgar3'] = zonenum
+        if 'intgar4' not in kwargs.keys():
+            kwargs['intgar4'] = ownernum
+        if 'realar1' not in kwargs.keys():
+            kwargs['realar1'] = 34.5
+        ierr = psspy.bus_data_3(genbus,**kwargs)
+        if ierr:
+            self.error_message += 'API \'bus_data_3\' error code {} for bus {}'.format(ierr,bus)
+            return pd.DataFrame()
         
-    def create_gen(self,name,busnum,capacity,newbusnum,newgenbusnum,newgenbuskv):
-        """Splits the specified bus and inserts a generator at the new bus"""
-        ierr = psspy.splt(poi_busnum,new_poi_busnum,'POI ' + str(name))
-        if not ierr:
-            try:
-                areanum = self.__get_bus_areas__([poi_busnum])[0]
-                zonenum = self.__get_bus_zones__([poi_busnum])[0]
-                vreg = self.__get_bus_pu__([poi_busnum])[0]
-            except Exception as e:
-                self.error_message += 'Error retrieving bus area: {}'.format(str(e))
-                return 1
-            ierr = psspy.bus_data_3(new_gen_busnum,intgar1=2,intgar2=areanum,intgar3=zonenum,realar1=34.5,name=str(name))        
-            if not ierr:
-                ierr = psspy.plant_data(new_gen_busnum,poi_busnum,[vreg,100.0])
-                if not ierr:
-                    ierr, realaro = psspy.two_winding_data(new_gen_busnum,new_poi_busnum,'1',intgar=1)
-                    if not ierr:
-                        ierr = psspy.machine_data_2(new_gen_busnum,r"""1""",realar3=capacity/3,realar4=-capacity/3,realar5=capacity, realar6=0.0,realar8=1000000000,realar9=1000000000)
-                        if not ierr:
-                            psspy.fnsl([0,0,0,0,0,0,0,0])
-                            ierr = psspy.solved()
-                            count = 1
-                            while ierr == 1 and count < 10:
-                                psspy.fnsl([0,0,0,0,0,0,0,0])
-                                ierr = psspy.solved()
-                                count += 1
-                            if ierr:
-                                self.error_message += 'API \'solved\' error code {}'.format(ierr)
-                    else:
-                        self.error_message += 'API \'machine_data_2\' error code {}'.format(ierr)
-                else:
-                    self.error_message += 'API \'plant_data\' error code {}'.format(ierr)
-            else:
-                self.error_message += 'API \'bus_data_3\' error code {}'.format(ierr)
-        else:
-            self.error_message += 'API \'splt\' error code {}'.format(ierr)
-        return ierr
+        # regulate the genbus to its original voltage
+        ierr = psspy.plant_data(genbus,0,[vreg,100.0])
+        if ierr:
+            self.error_message += 'API \'plant_data\' error code {} for new machine at {}'.format(ierr,bus)
+        
+        # insert transformer from gen bus to poi bus
+        ierr, realaro = psspy.two_winding_data(genbus,bus,'1',intgar=1)
+        if ierr:
+            self.error_message += 'API \'two_winding_data\' error code {} for new transformer at {}'.format(ierr,bus)
+        
+        # specify the new machine data
+        ierr = psspy.machine_data_2(genbus,r"""1""",realar3=capacity/3,realar4=-capacity/3,realar5=capacity, realar6=0.0,realar8=1000000000,realar9=1000000000)
+        if ierr:
+            self.error_message += 'API \'machine_data_2\' error code {} for new machine at {}'.format(ierr,bus)
 
-    def __dispatch_gen__(self,busnum,uid='1',pgen=_f):
+        # ensure the case solves with the new machine
+        psspy.fnsl([0,0,0,0,0,0,0,0])
+        ierr = psspy.solved()
+        count = 1
+        while ierr == 1 and count < 10:
+            psspy.fnsl([0,0,0,0,0,0,0,0])
+            ierr = psspy.solved()
+            count += 1
+        if ierr:
+            self.error_message += 'API \'solved\' error code {}'.format(ierr)
+            return pd.DataFrame()
+
+        # return a dataframe of the new machine
+        return self.get_multiple_machine_data(buslist=[genbus])
+
+
+    def dispatch_gen(self,busnum,uid='1',pgen=_f):
         """redispatches the assigned generator to the specified power output"""
         intgar = [_i,_i,_i,_i,_i,_i]
         realar = [pgen,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f,_f]
@@ -958,10 +974,9 @@ class pypsse(object):
         return ierr
 
 if __name__ == '__main__':
-    psse = pypsse()
-    psse.opencase()
-    psse.solvecase()
     
-
+    psse_ = pypsse()
+    psse_.opencase()
+    psse_.solvecase()
 
 
