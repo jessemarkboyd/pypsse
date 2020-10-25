@@ -111,7 +111,7 @@ class pypsse(object):
     def __del__(self):
         """method automatically called when an instance of pypsse is deleted."""
         self.__delete_created_files__()
-        # sys.stdout = stdout
+        sys.stdout = stdout
 
 
     def __reset__(self,delete_files=True):
