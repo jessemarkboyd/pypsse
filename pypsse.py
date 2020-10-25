@@ -53,7 +53,6 @@ class pypsse(object):
     is created, it will change all pypsse object reference cases to the most
     recently opened case. This is unfortunate. Note: reserve sid number 11 for
     use in the class methods (it will overwrite other subsystems with sid 11)."""
-        
     
     def __init__(self):
         """Initialization prepares the error message and redirects the PSSE
@@ -112,7 +111,7 @@ class pypsse(object):
     def __del__(self):
         """method automatically called when an instance of pypsse is deleted."""
         self.__delete_created_files__()
-        sys.stdout = stdout
+        # sys.stdout = stdout
 
 
     def __reset__(self,delete_files=True):
@@ -178,7 +177,17 @@ class pypsse(object):
         self.support_file_path = os.path.splitext(casepath)[0]
         psspy.psseinit(80000)
         if os.path.splitext(casepath)[1] == '.raw':
-            version = input('PSS/E version (number 15-34) > ')
+            # version = input('PSS/E version (number 15-34) > ')
+
+            with open(casepath, "r") as file:
+                lines = file.readlines()[:2]
+                if lines[0][:2] == '@!':
+                    metadata_index = 1
+                else:
+                    metadata_index = 0
+                metadata_line = lines[metadata_index].split(',')
+                version = int(metadata_line[2])
+
             if version not in range(15,35):
                 raise ValueError('Incorrect number entered for PSS/E version: {}'.format(version))
             ierr = psspy.readrawversion(0,str(version),casepath)
